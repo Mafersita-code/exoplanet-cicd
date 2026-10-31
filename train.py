@@ -1,0 +1,69 @@
+"""Entrena el modelo Champion de exoplanetas y lo guarda en models/champion.joblib.
+
+Dataset: Kepler Objects of Interest (cumulative.csv, NASA Exoplanet Archive).
+Objetivo: clasificar un objeto como CONFIRMED (1) o FALSE POSITIVE (0).
+Los CANDIDATE se excluyen porque aún no tienen una etiqueta confirmada.
+"""
+from pathlib import Path
+
+import joblib
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+
+DATA_PATH = Path("data/cumulative.csv")
+MODEL_PATH = Path("models/champion.joblib")
+
+# Variables físicas del tránsito y de la estrella (sin koi_score ni koi_fpflag_*,
+# que prácticamente revelan la respuesta y harían trampa al modelo).
+FEATURES = [
+    "koi_period",     # Periodo orbital (días)
+    "koi_duration",   # Duración del tránsito (horas)
+    "koi_depth",      # Profundidad del tránsito (ppm)
+    "koi_prad",       # Radio del planeta (radios terrestres)
+    "koi_teq",        # Temperatura de equilibrio (K)
+    "koi_model_snr",  # Relación señal/ruido del tránsito
+    "koi_steff",      # Temperatura efectiva de la estrella (K)
+    "koi_srad",       # Radio de la estrella (radios solares)
+]
+TARGET = "koi_disposition"
+
+
+def main() -> None:
+    df = pd.read_csv(DATA_PATH)
+    df = df[df[TARGET].isin(["CONFIRMED", "FALSE POSITIVE"])]
+
+    X = df[FEATURES]
+    y = (df[TARGET] == "CONFIRMED").astype(int)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),  # 363 filas con vacíos
+            ("model", RandomForestClassifier(
+                n_estimators=200, max_depth=12, class_weight="balanced",
+                random_state=42, n_jobs=-1,
+            )),
+        ]
+    )
+    pipeline.fit(X_train, y_train)
+
+    proba = pipeline.predict_proba(X_test)[:, 1]
+    pred = (proba >= 0.5).astype(int)
+    print(f"Accuracy: {accuracy_score(y_test, pred):.3f}")
+    print(f"F1-score: {f1_score(y_test, pred):.3f}")
+    print(f"ROC-AUC:  {roc_auc_score(y_test, proba):.3f}")
+
+    MODEL_PATH.parent.mkdir(exist_ok=True)
+    joblib.dump(pipeline, MODEL_PATH, compress=3)
+    print(f"Modelo guardado en {MODEL_PATH}")
+
+
+if __name__ == "__main__":
+    main()
