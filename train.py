@@ -3,10 +3,16 @@
 Dataset: Kepler Objects of Interest (cumulative.csv, NASA Exoplanet Archive).
 Objetivo: clasificar un objeto como CONFIRMED (1) o FALSE POSITIVE (0).
 Los CANDIDATE se excluyen porque aún no tienen una etiqueta confirmada.
+
+Cada entrenamiento se registra en MLflow (parámetros, métricas y modelo).
+Los artefactos se guardan en S3 a través del servidor de MLflow.
 """
+import os
 from pathlib import Path
 
 import joblib
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
@@ -31,6 +37,12 @@ FEATURES = [
 ]
 TARGET = "koi_disposition"
 
+PARAMS = {"n_estimators": 200, "max_depth": 12, "class_weight": "balanced"}
+
+# Servidor de MLflow (se levanta en local; los artefactos van a S3)
+mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5001"))
+mlflow.set_experiment("exoplanetas-kepler")
+
 
 def main() -> None:
     df = pd.read_csv(DATA_PATH)
@@ -46,19 +58,35 @@ def main() -> None:
     pipeline = Pipeline(
         [
             ("imputer", SimpleImputer(strategy="median")),  # 363 filas con vacíos
-            ("model", RandomForestClassifier(
-                n_estimators=200, max_depth=12, class_weight="balanced",
-                random_state=42, n_jobs=-1,
-            )),
+            ("model", RandomForestClassifier(**PARAMS, random_state=42, n_jobs=-1)),
         ]
     )
-    pipeline.fit(X_train, y_train)
+    with mlflow.start_run(run_name="random-forest"):
+        pipeline.fit(X_train, y_train)
 
-    proba = pipeline.predict_proba(X_test)[:, 1]
-    pred = (proba >= 0.5).astype(int)
-    print(f"Accuracy: {accuracy_score(y_test, pred):.3f}")
-    print(f"F1-score: {f1_score(y_test, pred):.3f}")
-    print(f"ROC-AUC:  {roc_auc_score(y_test, proba):.3f}")
+        proba = pipeline.predict_proba(X_test)[:, 1]
+        pred = (proba >= 0.5).astype(int)
+        metrics = {
+            "accuracy": accuracy_score(y_test, pred),
+            "f1": f1_score(y_test, pred),
+            "roc_auc": roc_auc_score(y_test, proba),
+        }
+        for name, value in metrics.items():
+            print(f"{name}: {value:.3f}")
+
+        # Registro en MLflow
+        mlflow.log_params(PARAMS)
+        mlflow.log_param("features", ",".join(FEATURES))
+        mlflow.log_param("n_train", len(X_train))
+        mlflow.log_metrics(metrics)
+        # MLflow 3 guarda modelos sklearn con skops (formato seguro); hay que
+        # declarar como confiables los tipos internos del RandomForest.
+        mlflow.sklearn.log_model(
+            pipeline,
+            name="model",
+            registered_model_name="exoplanet-champion",
+            skops_trusted_types=["numpy.dtype", "sklearn.tree._tree.Tree"],
+        )
 
     MODEL_PATH.parent.mkdir(exist_ok=True)
     joblib.dump(pipeline, MODEL_PATH, compress=3)
