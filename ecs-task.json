@@ -1,0 +1,19 @@
+{
+  "family": "exoplanet-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "1024",
+  "runtimePlatform": {"cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX"},
+  "executionRoleArn": "arn:aws:iam::426143721250:role/ecsTaskExecutionRole",
+  "containerDefinitions": [{
+    "name": "api",
+    "image": "426143721250.dkr.ecr.us-east-2.amazonaws.com/exoplanet-api:v1",
+    "essential": true,
+    "portMappings": [{"containerPort": 8000, "protocol": "tcp"}],
+    "logConfiguration": {"logDriver": "awslogs", "options": {
+      "awslogs-group": "/ecs/exoplanet-api",
+      "awslogs-region": "us-east-2",
+      "awslogs-stream-prefix": "api"}}
+  }]
+}
