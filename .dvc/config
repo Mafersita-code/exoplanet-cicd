@@ -1,5 +1,0 @@
-[core]
-    remote = s3remote
-['remote "s3remote"']
-    url = s3://mafer-exoplanetas-mlops-426143721250/dvc
-    region = us-east-2
