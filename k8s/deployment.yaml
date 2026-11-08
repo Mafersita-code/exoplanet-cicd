@@ -1,0 +1,46 @@
+# Deployment: le dice a Kubernetes qué imagen correr y cuántas réplicas.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exoplanet-api
+  labels:
+    app: exoplanet-api
+spec:
+  replicas: 1                      # Empezamos con un solo contenedor
+  selector:
+    matchLabels:
+      app: exoplanet-api
+  template:
+    metadata:
+      labels:
+        app: exoplanet-api
+    spec:
+      containers:
+        - name: api
+          image: exoplanet-api:v1          # Imagen construida localmente (Práctica 8)
+          imagePullPolicy: Never           # No descargarla: ya existe en Docker Desktop
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:                      # Lo que el pod tiene garantizado
+              cpu: 250m                    # 0.25 CPU
+              memory: 256Mi
+            limits:                        # Lo máximo que puede usar
+              cpu: 500m                    # 0.5 CPU: así se satura rápido en la demo
+              memory: 512Mi
+          readinessProbe:                  # Solo recibe tráfico cuando /health responde
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5              # Bajo carga /health tarda más de 1 s (el valor por defecto)
+            failureThreshold: 3
+          livenessProbe:                   # Si deja de responder, Kubernetes lo reinicia
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6

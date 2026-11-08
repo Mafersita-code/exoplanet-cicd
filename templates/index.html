@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clasificador de Exoplanetas</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0b1020; color: #e6e9f2; margin: 0; padding: 24px; }
+    main { max-width: 640px; margin: 0 auto; }
+    h1 { margin-bottom: 4px; }
+    p.sub { color: #9aa3b8; margin-top: 0; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display: flex; flex-direction: column; font-size: 14px; gap: 4px; }
+    input { padding: 8px; border-radius: 6px; border: 1px solid #2c3550; background: #141b30; color: inherit; }
+    button { grid-column: 1 / -1; padding: 10px; border: 0; border-radius: 6px; background: #5b8cff; color: #fff; font-size: 16px; cursor: pointer; }
+    #result { margin-top: 20px; padding: 16px; border-radius: 8px; background: #141b30; display: none; }
+    @media (max-width: 520px) { form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🪐 Clasificador de Exoplanetas</h1>
+  <p class="sub">Datos Kepler (NASA). ¿Planeta confirmado o falso positivo? Modelo didáctico.</p>
+  <form id="form">
+    <label>Periodo orbital (días)<input name="koi_period" type="number" step="any" value="9.488" required></label>
+    <label>Duración del tránsito (h)<input name="koi_duration" type="number" step="any" value="2.958" required></label>
+    <label>Profundidad del tránsito (ppm)<input name="koi_depth" type="number" step="any" value="615.8" required></label>
+    <label>Radio del planeta (R⊕)<input name="koi_prad" type="number" step="any" value="2.26" required></label>
+    <label>Temperatura de equilibrio (K)<input name="koi_teq" type="number" step="any" value="793" required></label>
+    <label>Señal/ruido<input name="koi_model_snr" type="number" step="any" value="35.8" required></label>
+    <label>Temperatura de la estrella (K)<input name="koi_steff" type="number" step="any" value="5455" required></label>
+    <label>Radio de la estrella (R☉)<input name="koi_srad" type="number" step="any" value="0.927" required></label>
+    <button type="submit">Clasificar</button>
+  </form>
+  <div id="result"></div>
+</main>
+<script>
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries([...new FormData(e.target)].map(([k, v]) => [k, Number(v)]));
+    const res = await fetch("/predict", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+    });
+    const out = await res.json();
+    const box = document.getElementById("result");
+    box.style.display = "block";
+    box.innerHTML = res.ok
+      ? `<strong>${out.prediction}</strong><br>Probabilidad de planeta: ${(out.planet_probability * 100).toFixed(1)}%<br>Confianza: ${out.confidence_level}`
+      : `Error: revisa los valores (${res.status})`;
+  });
+</script>
+</body>
+</html>

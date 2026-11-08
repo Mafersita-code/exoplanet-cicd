@@ -1,0 +1,12 @@
+# Service: un punto de entrada único que reparte el tráfico entre todas las réplicas.
+apiVersion: v1
+kind: Service
+metadata:
+  name: exoplanet-api
+spec:
+  type: LoadBalancer        # En Docker Desktop se expone en localhost
+  selector:
+    app: exoplanet-api
+  ports:
+    - port: 8080            # http://localhost:8080
+      targetPort: 8000      # Puerto de uvicorn dentro del contenedor
